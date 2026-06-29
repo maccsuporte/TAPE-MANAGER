@@ -1,0 +1,19 @@
+# Tape Manager - dependências Python
+# Compatível com Python 3.9+ (RHEL 8/9), 3.11+ (OpenSUSE Leap 16, Debian 12), 3.12+ (Ubuntu 24.04)
+PyYAML>=6.0
+
+# Dependências opcionais (já presentes no sistema):
+#  - mtx        (Tape Library operations)
+#  - mt         (mt-st; status/eject de tape)
+#  - tar        (GNU tar)
+#  - lsscsi     (descoberta de changer e drives)
+#  - sg3_utils  (sg_inq; serial number SCSI)
+#     Nomes por distro:
+#       Debian/Ubuntu : sg3-utils
+#       RHEL/OpenSUSE : sg3_utils
+#
+# Instalação manual:
+#   RHEL/CentOS/Rocky/Alma : sudo dnf install mtx mt-st lsscsi sg3_utils tar
+#                            (requer EPEL: sudo dnf install epel-release)
+#   OpenSUSE/SLES          : sudo zypper install mtx mt-st lsscsi sg3_utils tar
+#   Debian/Ubuntu          : sudo apt-get install mtx mt-st lsscsi sg3-utils tar
