@@ -20,13 +20,13 @@ multi-cartucho, e extração via dd.
 # 1. Extrair o projeto
 unzip tape_manager.zip -d /root/root/
 
-# 2. Criar ambiente virtual
+# 2. Executar o instalador
+bach install.sh ou ./install.sh
+
+# 3. Criar ambiente virtual
 cd /root/root/tape_manager
 python3 -m venv .venv
 source .venv/bin/activate
-
-# 3. Instalar dependências
-pip install -r requirements.txt
 
 # 4. Verificar instalação
 python -m tape_manager --version
