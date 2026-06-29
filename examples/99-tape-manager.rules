@@ -1,0 +1,31 @@
+# =============================================================================
+# Regras udev para Tape Library e Drives (qualquer distribuição)
+# =============================================================================
+# Instalar em: /etc/udev/rules.d/99-tape-manager.rules
+#   sudo cp examples/99-tape-manager.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger
+#
+# Estas regras garantem:
+#   - Permissões 0660 para /dev/nst* /dev/st* /dev/sg* /dev/changer
+#   - Grupo "tape" dono dos dispositivos (criado automaticamente em Debian/Ubuntu;
+#     em RHEL/OpenSUSE pode ser necessário: sudo groupadd -r tape)
+#   - Symlinks persistentes em /dev/tape/by-id/ (já padrão do kernel)
+# =============================================================================
+
+# Tape drives (rewind e non-rewind)
+KERNEL=="nst[0-9]*|st[0-9]*", SUBSYSTEM=="scsi_tape", \
+    GROUP="tape", MODE="0660"
+
+# Medium Changer (Tape Library)
+KERNEL=="sg[0-9]*", SUBSYSTEM=="scsi_generic", \
+    ATTRS{type}=="8", \
+    SYMLINK+="changer", GROUP="tape", MODE="0660"
+
+# Generic SCSI devices (necessário para sg_inq, mtx)
+KERNEL=="sg[0-9]*", SUBSYSTEM=="scsi_generic", \
+    GROUP="tape", MODE="0660"
+
+# /dev/changer legacy symlink (algumas libraries)
+SUBSYSTEM=="scsi_changer", KERNEL=="sch[0-9]*", \
+    SYMLINK+="changer", GROUP="tape", MODE="0660"
