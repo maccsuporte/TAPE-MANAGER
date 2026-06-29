@@ -1,0 +1,185 @@
+# =============================================================================
+# Tape Manager - Configuração Centralizada
+# =============================================================================
+# Este arquivo concentra TODOS os parâmetros operacionais do projeto.
+# Edite conforme o hardware disponível (Tape Library, drives e fitas).
+# =============================================================================
+
+project:
+  name: "Tape Manager"
+  version: "2.0.0"
+  # Diretório padrão para saídas (planos, TOCs, logs).
+  # Relativo ao diretório do projeto se começar com "./" ou "..".
+  # Absoluto caso contrário. Default: ./output (dentro do projeto).
+  default_output_dir: "./output"
+
+# -----------------------------------------------------------------------------
+# Tape Library (Changer)
+# -----------------------------------------------------------------------------
+# device: null  -> descoberta automática (/dev/changer, lsscsi, scan /dev/sg*)
+# Caso queira forçar, informe o caminho (ex: "/dev/sg3")
+changer:
+  device: null
+  mtx_bin: "mtx"
+  inquiry_timeout_sec: 15
+  status_timeout_sec: 60
+  inventory_timeout_sec: 120
+  load_timeout_sec: 180
+  unload_timeout_sec: 180
+
+# -----------------------------------------------------------------------------
+# Drives dedicados (identificação por SERIAL NUMBER — fallback)
+# -----------------------------------------------------------------------------
+# No modo multi-drive, o operador seleciona os /dev/nst* disponíveis no menu.
+# O dedicated_serial é usado apenas como fallback para operações single-drive
+# (erase, drive_status) quando o operador não seleciona um drive específico.
+drives:
+  dedicated_serial: null        # Ex: "XYZ123ABC"
+  mt_bin: "mt"
+  tar_bin: "tar"
+  sg_inq_bin: "sg_inq"
+  lsscsi_bin: "lsscsi"
+  status_retry_count: 5
+  status_retry_delay_sec: 10
+  online_check_timeout_sec: 90
+  # Bypass para mhvtl problemático: se o mt status não reconhecer a tape
+  # como ONLINE mesmo ela estando carregada, ative esta opção para pular
+  # a verificação e assumir que a tape está pronta após mtx load.
+  # IMPORTANTE: No tape_manager o mt NUNCA é usado antes de tar -cvf
+  # (escrita) por causa de "Device busy". skip_online_check=false para
+  # que o fluxo de escrita não invoque mt status.
+  skip_online_check: false
+
+# -----------------------------------------------------------------------------
+# Tabela de capacidades de cartuchos (em GiB usáveis)
+# -----------------------------------------------------------------------------
+# "tar"  = capacidade ao gravar com GNU tar (sem compressão, sem LTFS)
+# "ltfs" = capacidade ao gravar via LTFS
+cartridges:
+  dummy:
+    tar: 5
+    ltfs: 5
+  JRT01:
+    tar: 2
+    ltfs: 2
+  JAE05:
+    tar: 460
+    ltfs: null
+  JAE06:
+    tar: 590
+    ltfs: null
+  JBE05:
+    tar: 650
+    ltfs: null
+  JBE06:
+    tar: 925
+    ltfs: null
+  JBE07:
+    tar: 1485
+    ltfs: 1350
+  JCE07:
+    tar: 3720
+    ltfs: 3390
+
+# -----------------------------------------------------------------------------
+# Planejamento de cópia
+# -----------------------------------------------------------------------------
+planner:
+  # Algoritmo de bin-packing: "ffd" (First Fit Decreasing)
+  algorithm: "ffd"
+  # Margem de segurança (em bytes) subtraída da capacidade para evitar
+  # estouro por overhead do tar/EOF marks.
+  safety_margin_bytes: 524288000        # 500 MiB
+  # Tamanho mínimo de arquivo para considerar (menores são agrupados no fim)
+  small_file_threshold_bytes: 1048576   # 1 MiB
+  # Nome do arquivo de plano gerado
+  plan_filename_template: "plan.{cartridge}.{format}.txt"
+  # Template do TOC por volume
+  volume_filename_template: "vol{index:05d}_{used_gib:05d}GiB.lst"
+  # Se true, executa mt erase antes de tar -cvf. DESATIVADO no tape_manager
+  # porque o mt antes do tar -cvf causa "Device busy".
+  erase_before_write: false
+
+# -----------------------------------------------------------------------------
+# Gravação TAR
+# -----------------------------------------------------------------------------
+writer:
+  # Utiliza /dev/nst* (non-rewind) para permitir múltiplos arquivos por fita.
+  use_non_rewind_device: true
+  # Argumentos extras para o GNU tar
+  tar_extra_args:
+    - "--no-unquote"
+  # Validar integridade pós-cópia listando o conteúdo da fita com tar -tf.
+  # IMPORTANTE: No tape_manager a pós-validação é NÃO FATAL (a tape está no
+  # fim após a gravação, e tar -tf pode falhar com I/O error). Apenas loga
+  # warning. O flag abaixo controla se a tentativa é feita.
+  post_verify: true
+  post_verify_timeout_sec: 7200
+  # NÃO usar mt offline (eject) antes do unload no tape_manager.
+  # O unload é feito exclusivamente via mtx unload com slot livre.
+  eject_before_unload: false
+  # --checkpoint=N para progresso mais granular do tar.
+  use_tar_checkpoint: false
+  # Tipo de checkpoint-action. "" = nenhum; "stderr" = GNU tar >=1.29;
+  tar_checkpoint_action: ""
+  # Retry do tar -cvf quando encontrar "Device busy".
+  # 3 tentativas com 10s de espera entre elas.
+  busy_retry_count: 3
+  busy_retry_delay_sec: 10
+
+# -----------------------------------------------------------------------------
+# Troca automática de tape
+# -----------------------------------------------------------------------------
+auto_change:
+  enabled: true
+  operator_prompt_timeout_sec: 0   # 0 = espera indefinida
+  poll_interval_sec: 30            # verifica inserção a cada 30s
+  max_poll_attempts: 0             # 0 = ilimitado
+
+# -----------------------------------------------------------------------------
+# Integridade e recuperação
+# -----------------------------------------------------------------------------
+integrity:
+  # Arquivo de progresso (JSON) por plano, permite retomar.
+  progress_filename: "progress.json"
+  pre_copy_verify: true
+  # post_copy_verify: a pós-validação é NÃO FATAL no tape_manager.
+  # Se true, o writer tenta tar -tf após a gravação (mas falhas são logadas
+  # como warning, não abortam o volume).
+  post_copy_verify: false
+  checksum_files: false
+  checksum_algorithm: "sha256"
+
+# -----------------------------------------------------------------------------
+# Extrator (leitura de tapes via dd + tar -xf)
+# -----------------------------------------------------------------------------
+extractor:
+  # Tamanho de bloco para o dd na leitura de dados.
+  # dd if=/dev/nstN of=<file>.tar bs=64k iflag=fullblock
+  # Usa 64k (não 2M) para compatibilidade com mhvtl — block sizes muito
+  # grandes excedem o max block size do device tape virtual e causam
+  # leitura de 0 bytes.
+  dd_block_size: "64k"
+  # Timeout para cada dd (leitura de um segmento da tape) em segundos.
+  dd_timeout_sec: 14400
+
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
+logging:
+  level: "INFO"                    # DEBUG | INFO | WARNING | ERROR
+  console: true
+  file: true
+  file_path: "./logs/tape_manager.log"
+  mtx_operations_log: "./logs/mtx_operations.log"
+  max_size_mb: 50
+  backup_count: 5
+
+# -----------------------------------------------------------------------------
+# mhvtl - Virtual Tape Library (https://github.com/markh794/mhvtl)
+# -----------------------------------------------------------------------------
+mhvtl:
+  enabled: true                    # auto-detecção + fallback
+  config_dir: null                 # null = auto (/etc/mhvtl ou MHVTL_CONFIG_PATH)
+  auto_correlate: true             # preencher nst/st/sg em cada drive mhvtl
+  fallback_to_serial: true         # se NAA falhar, usar Unit serial number
