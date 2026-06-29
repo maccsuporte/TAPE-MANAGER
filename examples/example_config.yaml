@@ -1,0 +1,86 @@
+# =============================================================================
+# Exemplo de configuração para hardware específico
+# =============================================================================
+# Copie para /opt/tape_survey_manager/config/config.yaml e ajuste.
+# =============================================================================
+
+project:
+  name: "Tape Survey Manager - Produção"
+  version: "1.0.0"
+  default_output_dir: "/var/lib/tape_survey/output"
+
+# -----------------------------------------------------------------------------
+# Tape Library:IBM TS3500 com 2 drives LTO-7
+# Descoberta automática; se precisar forçar:
+#   sudo lsscsi -g | grep mediumx
+# -----------------------------------------------------------------------------
+changer:
+  device: null                      # null = auto; ou "/dev/sg3"
+  mtx_bin: "mtx"
+  inquiry_timeout_sec: 15
+  status_timeout_sec: 60
+  inventory_timeout_sec: 180
+  load_timeout_sec: 240
+  unload_timeout_sec: 240
+
+# -----------------------------------------------------------------------------
+# Drive dedicado: serial number do LTO-7 (descubra com sg_inq -s)
+# -----------------------------------------------------------------------------
+drives:
+  dedicated_serial: "WT8ABCD1234567"   # EXEMPLO - substitua pelo real
+  mt_bin: "mt"
+  tar_bin: "tar"
+  sg_inq_bin: "sg_inq"
+  lsscsi_bin: "lsscsi"
+  status_retry_count: 10
+  status_retry_delay_sec: 10
+  online_check_timeout_sec: 120
+
+# -----------------------------------------------------------------------------
+# Capacidades preservadas (GiB usáveis)
+# -----------------------------------------------------------------------------
+cartridges:
+  dummy:  {tar: 5,    ltfs: 5}
+  JRT01:  {tar: 2,    ltfs: 2}
+  JAE05:  {tar: 460,  ltfs: null}
+  JAE06:  {tar: 590,  ltfs: null}
+  JBE05:  {tar: 650,  ltfs: null}
+  JBE06:  {tar: 925,  ltfs: null}
+  JBE07:  {tar: 1485, ltfs: 1350}
+  JCE07:  {tar: 3720, ltfs: 3390}
+
+planner:
+  algorithm: "ffd"
+  safety_margin_bytes: 1073741824     # 1 GiB de margem (conservador)
+  small_file_threshold_bytes: 1048576
+  plan_filename_template: "plan.{cartridge}.{format}.txt"
+  volume_filename_template: "vol{index:05d}_{used_gib:05d}GiB.lst"
+
+writer:
+  use_non_rewind_device: true
+  tar_extra_args: ["--no-unquote", "--sparse"]
+  post_verify: true
+  post_verify_timeout_sec: 14400      # 4h para fitas grandes
+  eject_before_unload: true
+
+auto_change:
+  enabled: true
+  operator_prompt_timeout_sec: 0
+  poll_interval_sec: 30
+  max_poll_attempts: 0
+
+integrity:
+  progress_filename: ".progress.json"
+  pre_copy_verify: true
+  post_copy_verify: true
+  checksum_files: false                # true = sha256 de cada arquivo (caro!)
+  checksum_algorithm: "sha256"
+
+logging:
+  level: "INFO"
+  console: true
+  file: true
+  file_path: "/var/log/tape_survey/tape_survey.log"
+  mtx_operations_log: "/var/log/tape_survey/mtx_operations.log"
+  max_size_mb: 100
+  backup_count: 10
